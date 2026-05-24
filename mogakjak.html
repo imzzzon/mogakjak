@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Google Meet Clone - Persistent Data</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <style>
+      body {
+        background-color: #202124;
+        color: white;
+        font-family: "Google Sans", Roboto, Arial, sans-serif;
+        overflow: hidden;
+      }
+      .video-tile {
+        background-color: #3c4043;
+        border-radius: 8px;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        aspect-ratio: 16 / 9;
+        width: 100%;
+      }
+      .grid-container {
+        display: grid;
+        gap: 12px;
+        width: 100%;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.5s ease;
+      }
+      .participant-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .control-btn {
+        border-radius: 9999px;
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .control-btn.off {
+        border-radius: 12px;
+        background-color: #ea4335 !important;
+      }
+      #local-video {
+        transform: scaleX(-1);
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .avatar {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        background-color: #5f6368;
+      }
+      .custom-modal {
+        background: rgba(0, 0, 0, 0.9);
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal-content {
+        background: #fff;
+        color: #202124;
+        width: 95%;
+        max-width: 550px;
+        border-radius: 16px;
+        overflow: hidden;
+      }
+      .cropper-container {
+        width: 100%;
+        height: 400px;
+        background-color: #000;
+      }
+    </style>
+  </head>
+  <body class="h-screen flex flex-col">
+    <main class="flex-1 flex items-center justify-center p-6">
+      <div id="video-grid" class="grid-container"></div>
+    </main>
+
+    <footer class="h-20 flex items-center justify-between px-6">
+      <div class="flex items-center gap-4 w-1/4">
+        <div
+          class="text-sm font-medium border-r border-gray-600 pr-4"
+          id="clock"
+        >
+          00:00
+        </div>
+        <div class="text-sm font-medium tracking-tight">
+          personal study with
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <button
+          id="mic-btn"
+          onclick="toggleMic()"
+          class="control-btn bg-[#3c4043] off"
+        >
+          <span class="material-icons-outlined">mic_off</span>
+        </button>
+        <button
+          id="cam-btn"
+          onclick="toggleCamera()"
+          class="control-btn bg-[#3c4043] off"
+        >
+          <span class="material-icons-outlined">videocam_off</span>
+        </button>
+        <button class="control-btn bg-[#ea4335] !w-14">
+          <span class="material-icons-outlined">call_end</span>
+        </button>
+      </div>
+      <div class="flex items-center gap-2 w-1/4 justify-end">
+        <button
+          onclick="openSettings()"
+          class="p-3 bg-blue-600 rounded-full flex items-center gap-2 px-6 transition-transform active:scale-95"
+        >
+          <span class="material-icons-outlined">settings</span>
+          <span class="font-bold">설정</span>
+        </button>
+      </div>
+    </footer>
+
+    <!-- 설정 모달 -->
+    <div id="settings-modal" class="custom-modal">
+      <div class="modal-content p-8">
+        <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+          <span class="material-icons-outlined">people</span> 참가자 관리
+        </h2>
+        <div class="space-y-4">
+          <div class="flex gap-4">
+            <div class="flex-1">
+              <label class="text-[11px] font-bold text-gray-400 uppercase"
+                >내 이름</label
+              >
+              <input
+                type="text"
+                id="my-name-input"
+                class="w-full border-b-2 border-gray-200 py-1 focus:border-blue-500 outline-none transition-colors"
+              />
+            </div>
+            <div class="w-32">
+              <label class="text-[11px] font-bold text-gray-400 uppercase"
+                >총 인원 (1~6)</label
+              >
+              <input
+                type="number"
+                id="count-input"
+                min="1"
+                max="6"
+                class="w-full border-b-2 border-gray-200 py-1 outline-none"
+              />
+            </div>
+          </div>
+
+          <div
+            id="participant-list"
+            class="max-h-[300px] overflow-y-auto space-y-3 pr-2 border-t pt-4"
+          >
+            <!-- 참가자 목록 -->
+          </div>
+        </div>
+        <div class="flex justify-end mt-8 gap-3">
+          <button
+            onclick="closeSettings()"
+            class="px-6 py-2 text-gray-500 font-medium"
+          >
+            취소
+          </button>
+          <button
+            onclick="applySettings()"
+            class="px-10 py-2 bg-blue-600 text-white rounded-full font-bold shadow-lg shadow-blue-200"
+          >
+            적용하기
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 크롭 모달 -->
+    <div id="cropper-modal" class="custom-modal">
+      <div class="modal-content !max-w-3xl !bg-[#1a1c1e] text-white">
+        <div
+          class="p-4 flex justify-between items-center border-b border-gray-700"
+        >
+          <span class="font-bold">노출 영역 지정</span>
+          <button onclick="closeCropper()" class="material-icons-outlined">
+            close
+          </button>
+        </div>
+        <div class="cropper-container">
+          <img id="cropper-image" src="" style="max-width: 100%" />
+        </div>
+        <div class="p-6 flex justify-center gap-4">
+          <button
+            onclick="closeCropper()"
+            class="px-8 py-2 bg-gray-600 rounded-full font-bold"
+          >
+            취소
+          </button>
+          <button
+            id="save-crop-btn"
+            class="px-10 py-2 bg-[#00acee] rounded-full font-bold text-black"
+          >
+            선택 완료
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // 전역 상태
+      let myName = "나";
+      let participants = [
+        { name: "참가자 1", img: null },
+        { name: "참가자 2", img: null },
+      ];
+
+      let currentEditingIndex = -1;
+      let cropper = null;
+      let localStream = null;
+      let isCamOn = false;
+      let isMicOn = false;
+
+      window.onload = () => {
+        updateGrid();
+        updateClock();
+        setInterval(updateClock, 1000);
+        initMedia();
+      };
+
+      function updateClock() {
+        const now = new Date();
+        document.getElementById("clock").innerText = now.toLocaleTimeString(
+          "ko-KR",
+          { hour: "2-digit", minute: "2-digit", hour12: true }
+        );
+      }
+
+      // 인원수에 따른 레이아웃 및 타일 생성
+      function updateGrid() {
+        const grid = document.getElementById("video-grid");
+        grid.innerHTML = "";
+        const total = participants.length + 1;
+
+        // 가로 정렬 규칙 적용
+        if (total === 1) {
+          grid.style.gridTemplateColumns = "1fr";
+          grid.style.maxWidth = "800px";
+        } else if (total === 2) {
+          grid.style.gridTemplateColumns = "1fr 1fr";
+          grid.style.maxWidth = "1200px";
+        } else if (total === 3) {
+          grid.style.gridTemplateColumns = "1fr 1fr 1fr";
+          grid.style.maxWidth = "100%";
+        } else if (total === 4) {
+          grid.style.gridTemplateColumns = "1fr 1fr";
+          grid.style.maxWidth = "1000px";
+        } else {
+          grid.style.gridTemplateColumns = "1fr 1fr 1fr";
+          grid.style.maxWidth = "1200px";
+        }
+
+        // 본인 타일
+        grid.innerHTML += `
+                <div class="video-tile shadow-xl">
+                    <div id="self-avatar" class="avatar">나</div>
+                    <video id="local-video" autoplay playsinline muted class="hidden"></video>
+                    <div class="absolute bottom-3 left-3 text-xs bg-black/50 px-2 py-1 rounded">${myName} (나)</div>
+                    <div id="self-mute-icon" class="absolute top-3 right-3 bg-black/30 p-1 rounded-full flex"><span class="material-icons-outlined text-[14px]">mic_off</span></div>
+                </div>`;
+
+        // 참가자 타일들
+        participants.forEach((p) => {
+          grid.innerHTML += `
+                    <div class="video-tile shadow-xl">
+                        ${
+                          p.img
+                            ? `<img src="${p.img}" class="participant-img">`
+                            : `<div class="avatar">${p.name[0]}</div>`
+                        }
+                        <div class="absolute bottom-3 left-3 text-xs bg-black/50 px-2 py-1 rounded">${
+                          p.name
+                        }</div>
+                        <div class="absolute top-3 right-3 bg-black/30 p-1 rounded-full flex"><span class="material-icons-outlined text-[14px]">mic_off</span></div>
+                    </div>`;
+        });
+
+        if (localStream) {
+          const v = document.getElementById("local-video");
+          v.srcObject = localStream;
+          if (isCamOn) {
+            v.classList.remove("hidden");
+            document.getElementById("self-avatar").classList.add("hidden");
+          }
+        }
+      }
+
+      // 설정 열기
+      function openSettings() {
+        document.getElementById("my-name-input").value = myName;
+        document.getElementById("count-input").value = participants.length + 1;
+        renderSettingsList();
+        document.getElementById("settings-modal").style.display = "flex";
+      }
+
+      // 인원수 변경 시 데이터 유지 로직
+      function handleCountChange() {
+        // 1. 현재 화면에 입력되어 있는 이름들을 먼저 저장 (데이터 유실 방지)
+        const nameInputs = document.querySelectorAll(".name-input");
+        nameInputs.forEach((input, idx) => {
+          if (participants[idx]) participants[idx].name = input.value;
+        });
+
+        // 2. 새로운 인원수 계산
+        let newTotal =
+          parseInt(document.getElementById("count-input").value) || 1;
+        if (newTotal > 6) {
+          newTotal = 6;
+          document.getElementById("count-input").value = 6;
+        }
+        if (newTotal < 1) {
+          newTotal = 1;
+          document.getElementById("count-input").value = 1;
+        }
+
+        const newOtherCount = newTotal - 1;
+        const currentOtherCount = participants.length;
+
+        if (newOtherCount < currentOtherCount) {
+          // 인원이 줄어든 경우: 뒤쪽 삭제
+          participants = participants.slice(0, newOtherCount);
+        } else if (newOtherCount > currentOtherCount) {
+          // 인원이 늘어난 경우: 새 기본 데이터 추가
+          for (let i = currentOtherCount; i < newOtherCount; i++) {
+            participants.push({ name: `참가자 ${i + 1}`, img: null });
+          }
+        }
+
+        // 3. UI 다시 그리기
+        renderSettingsList();
+      }
+
+      function renderSettingsList() {
+        const list = document.getElementById("participant-list");
+        list.innerHTML =
+          participants.length > 0
+            ? '<p class="text-[10px] font-bold text-blue-500 mb-2 uppercase tracking-widest">나를 제외한 참가자 정보</p>'
+            : '<p class="text-gray-400 text-center py-4">혼자 참여 중입니다.</p>';
+
+        participants.forEach((p, i) => {
+          list.innerHTML += `
+                    <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 group transition-all hover:border-blue-200">
+                        <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500">${
+                          i + 1
+                        }</div>
+                        <input type="text" value="${
+                          p.name
+                        }" class="name-input flex-1 border-none bg-transparent text-sm font-semibold outline-none focus:text-blue-600" placeholder="이름 입력">
+                        <button onclick="startCrop(${i})" class="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-800 text-white text-[11px] font-bold transition-transform active:scale-95">
+                            <span class="material-icons-outlined text-xs">${
+                              p.img ? "cached" : "add_a_photo"
+                            }</span>
+                            ${p.img ? "이미지 변경" : "이미지 추가"}
+                        </button>
+                    </div>`;
+        });
+      }
+
+      // 이미지 크롭 시작
+      function startCrop(index) {
+        // 현재 입력된 이름들 우선 저장
+        const nameInputs = document.querySelectorAll(".name-input");
+        nameInputs.forEach((input, idx) => {
+          participants[idx].name = input.value;
+        });
+
+        currentEditingIndex = index;
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = "image/*";
+        fileInput.onchange = (e) => {
+          const file = e.target.files[0];
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const cropperImg = document.getElementById("cropper-image");
+            cropperImg.src = event.target.result;
+            document.getElementById("cropper-modal").style.display = "flex";
+            if (cropper) cropper.destroy();
+            cropper = new Cropper(cropperImg, {
+              aspectRatio: 16 / 9,
+              viewMode: 1,
+              autoCropArea: 1,
+            });
+          };
+          reader.readAsDataURL(file);
+        };
+        fileInput.click();
+      }
+
+      // 크롭 완료
+      document.getElementById("save-crop-btn").onclick = () => {
+        const canvas = cropper.getCroppedCanvas({ width: 1280, height: 720 });
+        participants[currentEditingIndex].img = canvas.toDataURL();
+        closeCropper();
+        renderSettingsList(); // 이미지 상태 반영을 위해 리스트 갱신
+      };
+
+      function closeCropper() {
+        document.getElementById("cropper-modal").style.display = "none";
+      }
+      function closeSettings() {
+        document.getElementById("settings-modal").style.display = "none";
+      }
+
+      // 최종 적용
+      function applySettings() {
+        myName = document.getElementById("my-name-input").value || "나";
+        const nameInputs = document.querySelectorAll(".name-input");
+        nameInputs.forEach((input, idx) => {
+          if (participants[idx]) participants[idx].name = input.value;
+        });
+        updateGrid();
+        closeSettings();
+      }
+
+      // 인원수 입력 이벤트 리스너
+      document.getElementById("count-input").oninput = handleCountChange;
+
+      // 카메라/마이크 시스템 (동일)
+      async function initMedia() {
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true,
+          });
+          document.getElementById("local-video").srcObject = localStream;
+          localStream.getTracks().forEach((t) => (t.enabled = false));
+        } catch (err) {}
+      }
+
+      function toggleCamera() {
+        isCamOn = !isCamOn;
+        if (localStream) localStream.getVideoTracks()[0].enabled = isCamOn;
+        const v = document.getElementById("local-video"),
+          a = document.getElementById("self-avatar"),
+          b = document.getElementById("cam-btn");
+        if (isCamOn) {
+          v.classList.remove("hidden");
+          a.classList.add("hidden");
+          b.classList.remove("off");
+          b.querySelector("span").innerText = "videocam";
+        } else {
+          v.classList.add("hidden");
+          a.classList.remove("hidden");
+          b.classList.add("off");
+          b.querySelector("span").innerText = "videocam_off";
+        }
+      }
+
+      function toggleMic() {
+        isMicOn = !isMicOn;
+        if (localStream) localStream.getAudioTracks()[0].enabled = isMicOn;
+        const b = document.getElementById("mic-btn"),
+          m = document.getElementById("self-mute-icon");
+        if (isMicOn) {
+          b.classList.remove("off");
+          b.querySelector("span").innerText = "mic";
+          m.classList.add("hidden");
+        } else {
+          b.classList.add("off");
+          b.querySelector("span").innerText = "mic_off";
+          m.classList.remove("hidden");
+        }
+      }
+    </script>
+  </body>
+</html>
