@@ -1,6 +1,20 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
   <head>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-STYJTSWM70"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+
+      gtag("config", "G-STYJTSWM70");
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Google Meet Clone - Persistent Data</title>
@@ -256,7 +270,7 @@
         const now = new Date();
         document.getElementById("clock").innerText = now.toLocaleTimeString(
           "ko-KR",
-          { hour: "2-digit", minute: "2-digit", hour12: true }
+          { hour: "2-digit", minute: "2-digit", hour12: true },
         );
       }
 
@@ -321,6 +335,7 @@
 
       // 설정 열기
       function openSettings() {
+        gtag("event", "click_settings_btn");
         document.getElementById("my-name-input").value = myName;
         document.getElementById("count-input").value = participants.length + 1;
         renderSettingsList();
@@ -392,6 +407,16 @@
 
       // 이미지 크롭 시작
       function startCrop(index) {
+        // 현재 수정하려는 참가자의 이미지 존재 여부 파악
+        const isEdit =
+          participants[index] && participants[index].img ? "MODIFY" : "ADD";
+
+        // 🔥 [GA4 이벤트 추가] 참가자 이미지 추가/수정 액션 추적
+        gtag("event", "participant_image_action", {
+          action_type: isEdit,
+          participant_index: index + 1,
+        });
+
         // 현재 입력된 이름들 우선 저장
         const nameInputs = document.querySelectorAll(".name-input");
         nameInputs.forEach((input, idx) => {
@@ -438,7 +463,24 @@
 
       // 최종 적용
       function applySettings() {
+        // 설정창에 입력되어 있는 총인원 수 가져오기 (나 + 참가자들)
+        const totalCount = participants.length + 1;
+
+        // 🔥 [GA4 이벤트 추가] 설정된 총인원 값 추적
+        gtag("event", "set_total_participants", {
+          total_count: totalCount,
+        });
+
         myName = document.getElementById("my-name-input").value || "나";
+        // 🔥 [GA4 이벤트 추가] 기존 이름과 달라졌을 때만 이름 변경 이벤트 전송
+        if (inputName !== myName) {
+          gtag("event", "change_my_name", {
+            previous_name: myName,
+            new_name: inputName,
+          });
+        }
+
+        myName = inputName; // 기존 변수 업데이트 부분
         const nameInputs = document.querySelectorAll(".name-input");
         nameInputs.forEach((input, idx) => {
           if (participants[idx]) participants[idx].name = input.value;
@@ -464,6 +506,10 @@
 
       function toggleCamera() {
         isCamOn = !isCamOn;
+        // 🔥 [GA4 이벤트 추가] 카메라 온/오프 상태 추적
+        gtag("event", "camera_toggle", {
+          camera_status: isCamOn ? "ON" : "OFF",
+        });
         if (localStream) localStream.getVideoTracks()[0].enabled = isCamOn;
         const v = document.getElementById("local-video"),
           a = document.getElementById("self-avatar"),
